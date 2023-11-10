@@ -13,6 +13,8 @@
 
 // Fancy-sounding principles;
 // 1) This follows Merkle-Damgård construction, of iterating each block of data through all rounds individually
+// 2) This is a Feistel network, where each round is a function of the previous round
+// 3) Each round consists of subsitution, permutation and round key addition
 
 #include <stdio.h>
 #include <stdarg.h>
