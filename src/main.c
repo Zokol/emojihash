@@ -14,13 +14,17 @@
 // Fancy-sounding principles;
 // 1) This follows Merkle-Damgård construction, of iterating each block of data through all rounds individually
 // 2) This is a Feistel network, where each round is a function of the previous round
-// 3) Each round consists of subsitution, permutation and round key addition
+// 3) Design is based on SPN, Substitution-Permutation Network. Each round consists of subsitution, permutation and round key addition
 
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
+#include <wchar.h>
+#include <locale.h>
+#include "emojis.h"
+#include <signal.h>
 
 // -----------------------------------
 // DEFINITIONS
@@ -35,7 +39,7 @@
 #define BLOCK_SIZE 20
 
 // number of hash rounds
-#define ROUNDS 10
+#define ROUNDS 100
 
 // S-box table
 #define SBOX_SIZE 256
@@ -102,6 +106,26 @@ void print_round_keys()
     }
 }
 
+// Maps byte to emoji
+wchar_t emoji_mapper(char symbol)
+{
+    wchar_t emoji_start = 0x1F600;
+    wchar_t emoji_end = 0x1F64F;
+    int index = (u_int16_t)symbol % (emoji_end - emoji_start);
+    wchar_t emoji = emoji_start + index;
+    return emoji;
+}
+
+void print_emojis()
+{
+    setlocale(LC_ALL, "en_US.UTF-8");
+
+    for (int c_i = 0; c_i < BLOCK_SIZE; c_i++)
+    {
+        wprintf(L"%lc", emoji_mapper(state[c_i]));
+    }
+}
+
 // Convert a hexstring to a char sbox table
 void hexstring_to_sbox(char *hexstring, char *sbox)
 {
@@ -109,17 +133,17 @@ void hexstring_to_sbox(char *hexstring, char *sbox)
     if (len % 2 != 0)
     {
         printf("Error: hexstring length must be even\n");
-        return;
+        raise(SIGINT);
     }
     if (len / 2 > SBOX_SIZE)
     {
         printf("Error: hexstring is too long for sbox\n");
-        return;
+        raise(SIGINT);
     }
     if (len / 2 < SBOX_SIZE)
     {
         printf("Error: hexstring is too short for sbox\n");
-        return;
+        raise(SIGINT);
     }
     for (int i = 0; i < len; i += 2)
     {
@@ -135,17 +159,17 @@ void hexstring_to_permutation(char *hexstring, int *permutation)
     if (len % 2 != 0)
     {
         printf("Error: hexstring length must be even\n");
-        return;
+        raise(SIGINT);
     }
     if (len / 2 > BLOCK_SIZE)
     {
         printf("Error: hexstring is too long for permutation array\n");
-        return;
+        raise(SIGINT);
     }
     if (len / 2 < BLOCK_SIZE)
     {
         printf("Error: hexstring is too short for permutation array\n");
-        return;
+        raise(SIGINT);
     }
     for (int i = 0; i < len; i += 2)
     {
@@ -161,17 +185,17 @@ void hexstring_to_master_key(char *hexstring, char *master_key)
     if (len % 2 != 0)
     {
         printf("Error: hexstring length must be even\n");
-        return;
+        raise(SIGINT);
     }
     if (len / 2 > BLOCK_SIZE)
     {
         printf("Error: hexstring is too long for master key array\n");
-        return;
+        raise(SIGINT);
     }
     if (len / 2 < BLOCK_SIZE)
     {
         printf("Error: hexstring is too short for master key array\n");
-        return;
+        raise(SIGINT);
     }
     for (int i = 0; i < len; i += 2)
     {
@@ -473,9 +497,13 @@ int main(int argc, char *argv[])
     }
 
     if (debug)
+    {
         printf("--- FINAL HASH ---\n");
-    print_state();
-    printf("");
+        print_state();
+        printf("");
+    }
+
+    print_emojis();
 
     return 0;
 }
