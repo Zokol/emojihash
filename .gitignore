@@ -1,0 +1,8 @@
+# C
+*.out
+*.o
+*.obj
+
+# VSCode
+.vscode/
+*.code-workspace
