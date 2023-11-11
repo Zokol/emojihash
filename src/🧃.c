@@ -1,20 +1,25 @@
 /*
-    Tiiviste.c
+    🧃.c
 
-    printf("Usage: %s [-d] [-r] [-f filename | data]\n", argv[0]);
+    Author: Heikki Juva
+    Date: 2021-10-10
+
+    This is my submission for MEHU1-hash algorithm, as part of 1st annual "Tiivistekilpailu" (Hashing competition), organized by AB MEHU Limited
+
+    Fancy-sounding principles in this design;
+    1) Design follows Merkle-Damgård construction, of iterating each block of data through all rounds individually
+    2) Application utilizes ideas from Feistel network, where each round is a function of the previous round
+    3) Design is based on SPN, Substitution-Permutation Network. Each round consists of subsitution, permutation and round key addition
+    4) The core inspiration for this masterpiece is based on the ADCS-principle of Kouvosto Telecom; Always Deliver Concrete Service
+
+    Usage: 🧃 [-d] [-r] [-f filename | data]
 
     -d is debug mode, shows what's happening
     -f reads input from a file. Without it, reads input data from command line
-    -r is random byte generator mode. Use with seed data on the command line.
+    -r is random emoji generator mode. Use with seed data on the command line.
 
-
-    compiles at least with gcc on windows:   gcc -o tiiviste.exe tiiviste.c
+    compiles at least with gcc on OSX:   gcc -o $'\360\237\247\203'.bin $'\360\237\247\203'.c
 */
-
-// Fancy-sounding principles;
-// 1) This follows Merkle-Damgård construction, of iterating each block of data through all rounds individually
-// 2) This is a Feistel network, where each round is a function of the previous round
-// 3) Design is based on SPN, Substitution-Permutation Network. Each round consists of subsitution, permutation and round key addition
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -23,7 +28,6 @@
 #include <math.h>
 #include <wchar.h>
 #include <locale.h>
-#include "emojis.h"
 #include <signal.h>
 
 // -----------------------------------
@@ -128,13 +132,26 @@ wchar_t emoji_mapper(char symbol)
     return emoji;
 }
 
-void print_emojis()
+void print_emojis(int random_mode)
 {
     setlocale(LC_ALL, "en_US.UTF-8");
 
-    for (int c_i = 0; c_i < BLOCK_SIZE; c_i++)
+    if (random_mode)
     {
-        wprintf(L"%lc", emoji_mapper(state[c_i]));
+        char result = 0x00;
+        // Print random emojis
+        for (int i = 0; i < BLOCK_SIZE; i++)
+        {
+            result ^= state[i];
+        }
+        wprintf(L"%lc", emoji_mapper(result));
+    }
+    else
+    {
+        for (int c_i = 0; c_i < BLOCK_SIZE; c_i++)
+        {
+            wprintf(L"%lc", emoji_mapper(state[c_i]));
+        }
     }
 }
 
@@ -540,7 +557,7 @@ int main(int argc, char *argv[])
     }
 
     // Print the final hash
-    print_emojis();
+    print_emojis(random_mode);
 
     return 0;
 }
