@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "C++ Launch",
+            "name": "Test String",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceRoot}/src/main",
@@ -22,6 +22,32 @@
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceRoot}",
+            "environment": [],
+            "externalConsole": false, // set true to enable keyboard input
+            "osx": {
+                "MIMode": "lldb"
+            }
+        },
+        {
+            "name": "Test File",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceRoot}/src/main",
+            "preLaunchTask": "C/C++: gcc build active file",
+            "internalConsoleOptions": "openOnSessionStart",
+            "logging": {
+                "moduleLoad": false,
+                "programOutput": true,
+                "trace": false
+            },
+            "showDisplayString": false,
+            "args": [
+                "-d",
+                "-f",
+                "test.pdf"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceRoot}/src",
             "environment": [],
             "externalConsole": false, // set true to enable keyboard input
             "osx": {

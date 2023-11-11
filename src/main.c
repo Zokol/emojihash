@@ -39,7 +39,7 @@
 #define BLOCK_SIZE 20
 
 // number of hash rounds
-#define ROUNDS 100
+#define ROUNDS 50
 
 // S-box table
 #define SBOX_SIZE 256
@@ -104,6 +104,18 @@ void print_round_keys()
         }
         printf("\n");
     }
+}
+
+void print_progress(int n, int total, time_t start_time)
+{
+    time_t current_time = time(NULL);
+    long elapsed = current_time - start_time;
+    // Calculate the progress percentage
+    int progress = (int)((double)n / total * 100);
+    printf("\033[1A"); // Move cursor up
+    printf("\033[2K"); // Clear the line
+    printf("\rProcessed %d%% | %d/%d blocks | %ld seconds elapsed", progress, n, total, elapsed);
+    fflush(stdout);
 }
 
 // Maps byte to emoji
@@ -208,29 +220,37 @@ void hexstring_to_master_key(char *hexstring, char *master_key)
 // Generate round keys from the master key
 void generate_keys()
 {
-    extern char round_key_store[ROUNDS][BLOCK_SIZE];
-    extern int debug;
+    extern char round_key_store[ROUNDS][BLOCK_SIZE]; // Storage for round keys
+    extern char sbox[SBOX_SIZE];                     // Substitution bos table
+    extern int permutation[BLOCK_SIZE];              // Permutation table
+    extern int debug;                                // Debug flag
+
     int round_permutation[BLOCK_SIZE];
     char round_sbox[SBOX_SIZE];
     char master_key[BLOCK_SIZE];
 
-    char permutation_string[] = ROUND_PERMUTATION;
-    char sbox_string[] = ROUND_SBOX;
-    char master_key_string[] = MASTER_KEY;
+    char round_permutation_string[] = ROUND_PERMUTATION; // Round permutation table input string
+    char round_sbox_string[] = ROUND_SBOX;               // Round substitution table input string
+    char master_key_string[] = MASTER_KEY;               // Master key input string
+    char permutation_string[] = PERMUTATION;             // Permutation table input string
+    char sbox_string[] = SBOX;                           // Substitution table input string
 
-    // Generate sbox and permutation table from master key
-    hexstring_to_permutation(permutation_string, round_permutation);
-    hexstring_to_sbox(sbox_string, round_sbox);
+    // Parse input strings
+    hexstring_to_permutation(round_permutation_string, round_permutation);
+    hexstring_to_sbox(round_sbox_string, round_sbox);
     hexstring_to_master_key(master_key_string, master_key);
+    hexstring_to_permutation(permutation_string, permutation);
+    hexstring_to_sbox(sbox_string, sbox);
 
-    for (int i = 0; i < ROUNDS; i++)
+    // Generate round keys from master key
+    for (int i = 0; i < ROUNDS; i++) // Initialize round key for every round
     {
-        for (int j = 0; j < BLOCK_SIZE; j++)
+        for (int j = 0; j < BLOCK_SIZE; j++) // Initialize round key byte by byte
         {
-            round_key_store[i][j] = master_key[(i + j) % BLOCK_SIZE];
-            round_key_store[i][j] ^= round_sbox[round_key_store[i][j] & 0xFF];
+            round_key_store[i][j] = master_key[(i + j) % BLOCK_SIZE];          // Initialize round key byte with shifted master key
+            round_key_store[i][j] ^= round_sbox[round_key_store[i][j] & 0xFF]; // xor the round key byte with the round sbox
         }
-        for (int j = 0; j < BLOCK_SIZE; j++)
+        for (int j = 0; j < BLOCK_SIZE; j++) // Shuffle round key with the round permutation table
         {
             round_key_store[i][j] = round_key_store[i][round_permutation[j] % BLOCK_SIZE];
         }
@@ -246,14 +266,6 @@ void hash(const char block[BLOCK_SIZE], int data_length)
 {
     extern char state[BLOCK_SIZE]; // Internal state of the hash function, also the final hash value.
     extern int debug;
-
-    char permutation_string[] = PERMUTATION; // Permutation table, must match block size
-    int permutation[BLOCK_SIZE];
-    hexstring_to_permutation(permutation_string, permutation);
-
-    char sbox_string[] = SBOX; // Permutation table, must match block size
-    char sbox[SBOX_SIZE];
-    hexstring_to_sbox(sbox_string, sbox);
 
     // add padding to state if needed
     if (data_length < BLOCK_SIZE) // is the data smaller than the block size?
@@ -292,15 +304,6 @@ void hash(const char block[BLOCK_SIZE], int data_length)
 
         if (ENABLE_PERMUTATION)
         {
-            if (debug)
-            {
-                printf("Permutation array:\n");
-                for (int i = 0; i < BLOCK_SIZE; i++)
-                {
-                    printf("%d ", permutation[i] % BLOCK_SIZE);
-                }
-                printf("\n");
-            }
             // Permutation-logic
             // Shuffle state with the permutation table
             for (int i = 0; i < BLOCK_SIZE; i++)
@@ -359,17 +362,13 @@ int main(int argc, char *argv[])
 
     extern char state[BLOCK_SIZE];
     extern int debug;
-    extern char sbox[SBOX_SIZE];
-    extern int permutation[BLOCK_SIZE];
     int random_mode = 0;
     int read_from_file = 0;
-    char data[BLOCK_SIZE];
+    char data[BLOCK_SIZE] = {0};
     int data_length = 0;
     FILE *file = NULL;
 
-    char sbox_string[] = SBOX;
-    char permutation_string[] = PERMUTATION;
-
+    // Parse arguments
     for (int i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "-d") == 0)
@@ -404,23 +403,32 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (ENABLE_ROUND_KEY)
-    {
-        hexstring_to_sbox(sbox_string, sbox);
-        hexstring_to_permutation(permutation_string, permutation);
+    // Generate round keys from master key
+    // Parse substitution and permutation tables from input strings
+    generate_keys();
 
-        // Generate round keys from the master key
-        generate_keys();
-    }
-
+    // PRNG-mode
     if (random_mode && argc < 3)
     {
         printf("Note: use random mode with seed data on the command line.\n");
         return 1;
     }
 
+    // Read data from file
     if (read_from_file)
     {
+        // Get file size
+        fseek(file, 0L, SEEK_END);    // Go to end of file
+        long file_size = ftell(file); // Get file size
+        fseek(file, 0L, SEEK_SET);    // Reset file pointer to beginning of file
+
+        // Calculate number of blocks to be processed
+        int n_blocks = ceil((double)file_size / BLOCK_SIZE);
+        int n_blocks_processed = 0;
+
+        time_t start_time = time(NULL);
+        time_t last_print_time = time(NULL);
+
         // Read data from the file
         char ch;
         while (fread(&ch, 1, 1, file) == 1)
@@ -430,56 +438,83 @@ int main(int argc, char *argv[])
 
             if (data_length == BLOCK_SIZE)
             {
-                // Hash the 20-byte block
                 if (debug)
+                {
+                    printf("INPUT:       ");
                     print_data(data);
-                hash(data, data_length);
+                    printf("\n");
+                }
+                hash(data, data_length); // Hash the block
                 if (debug)
+                {
+                    printf("OUTPUT:      ");
                     print_state();
+                    printf("\n");
+                }
                 data_length = 0;
+                n_blocks_processed++;
+
+                if (debug)
+                {
+                    // Print progress
+                    time_t current_time = time(NULL);
+                    if (time(NULL) - last_print_time > 0)
+                    {
+                        print_progress(n_blocks_processed, n_blocks, start_time);
+                        last_print_time = time(NULL);
+                    }
+                }
             }
         }
     }
+
+    // Read data from command line
     else
     {
         // Process the data in BLOCK_SIZE-byte blocks from command line arguments
-        for (int i = 1; i < argc; i++)
+        for (int i = 1; i < argc; i++) // Go through all arguments
         {
-            // Skip options
+            // Skip option arguments, process only input data
             if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "-r") == 0 || strcmp(argv[i], "-f") == 0)
             {
                 continue;
             }
 
-            int arg_length = strlen(argv[i]);
-            for (int j = 0; j < arg_length; j++)
+            // argv[i] now has the input data
+            char *input_data = argv[i];                 // Pointer to the input data
+            int input_data_length = strlen(input_data); // Length of the input data
+            for (int j = 0; j < input_data_length; j++) // Go through all bytes in the input data
             {
-                data[data_length] = argv[i][j];
-                data_length++;
+                data[data_length] = input_data[j]; // Copy the byte to the data buffer
+                data_length++;                     // Increment the data length
 
-                if (data_length == BLOCK_SIZE)
+                if (data_length == BLOCK_SIZE) // Do we have a full block?
                 {
-                    // Hash the 20-byte block
+
                     if (debug)
                     {
                         printf("INPUT:       ");
                         print_data(data);
                         printf("\n");
                     }
-                    hash(data, data_length);
+                    hash(data, data_length); // Hash the block
                     if (debug)
                     {
                         printf("OUTPUT:      ");
                         print_state();
                         printf("\n");
                     }
-                    data_length = 0;
+                    data_length = 0;                     // Block has been hashed, reset data length
+                    for (int i = 0; i < BLOCK_SIZE; i++) // Clear the data buffer, so that last block does not contain repeated data
+                    {
+                        data[i] = 0;
+                    }
                 }
             }
         }
     }
 
-    // Pad and hash the last block
+    // Pad and hash the last block that did not reach BLOCK_SIZE
     if (data_length > 0)
     {
         if (debug)
@@ -488,9 +523,10 @@ int main(int argc, char *argv[])
             print_data(data);
             printf("\n");
         }
-        hash(data, data_length);
+        hash(data, data_length); // Hash the last block
     }
 
+    // Close input file
     if (read_from_file)
     {
         fclose(file);
@@ -503,6 +539,7 @@ int main(int argc, char *argv[])
         printf("");
     }
 
+    // Print the final hash
     print_emojis();
 
     return 0;
