@@ -2,7 +2,7 @@
     🧃.c
 
     Author: Heikki Juva
-    Date: 2021-10-10
+    Date: 2021-10-13
 
     This is my submission for MEHU1-hash algorithm, as part of 1st annual "Tiivistekilpailu" (Hashing competition), organized by AB MEHU Limited
 
