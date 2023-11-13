@@ -15,11 +15,12 @@ This is my submission for MEHU1-hash algorithm, as part of 1st annual "Tiivistek
 
 ## Usage
 ```
-🧃 [-d] [-r] [-f filename | data]
+🧃 [-d] [-r] [-p] [-f filename | data]
 
 -d is debug mode, shows what's happening
 -f reads input from a file. Without it, reads input data from command line
 -r is random emoji generator mode. Use with seed data on the command line.
+-p shows progress in file input mode
 ```
 
 ## Install
