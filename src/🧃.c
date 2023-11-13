@@ -2,7 +2,7 @@
     🧃.c
 
     Author: Heikki Juva
-    Date: 2021-10-10
+    Date: 2021-10-13
 
     This is my submission for MEHU1-hash algorithm, as part of 1st annual "Tiivistekilpailu" (Hashing competition), organized by AB MEHU Limited
 
@@ -12,11 +12,12 @@
     3) Design is based on SPN, Substitution-Permutation Network. Each round consists of subsitution, permutation and round key addition
     4) The core inspiration for this masterpiece is based on the ADCS-principle of Kouvosto Telecom; Always Deliver Concrete Service
 
-    Usage: 🧃 [-d] [-r] [-f filename | data]
+    Usage: 🧃 [-d] [-r] [-p] [-f filename | data]
 
     -d is debug mode, shows what's happening
     -f reads input from a file. Without it, reads input data from command line
     -r is random emoji generator mode. Use with seed data on the command line.
+    -p prints progress
 
     compiles at least with gcc on OSX:   gcc -o $'\360\237\247\203'.bin $'\360\237\247\203'.c
 */
@@ -45,12 +46,12 @@
 // number of hash rounds
 #define ROUNDS 50
 
-// S-box table
-#define SBOX_SIZE 256
-char sbox[SBOX_SIZE];
+// number of times to run data through the algorithm
+#define REPEAT_CYCLES 2
 
-// S-box table for block substitution, must match alphabet size
-#define SBOX "b3cc63eae2cc12ea15a5ec6df55f6d6920a34e6eb6f472fe127174eaf9fd6326a3ff6bf9034005438bd6a38b9036ea52f8db1da60c9534e905819ea72ccc049b011b540e973901a52698723b67263b56b876dde9ffa32cc29057b9a8e22b6ef761020f7b9830d99ebb5ac79495a04937ad81f7b38493a8cc8ab505660cab38f82fbcf1f02f9b58c572ae67cd4a21065460b254f7c1f1d99a9e761024d4a60e7895b96d7d82191831770e9b930717461470b0c5235e57644027f7aa2a2e1263ecb3e3f892fefff2b89af2cc91e07ed2c74725633b5418faf6efabd09ac3acd9f3ae6133e241a85e5cc540f674a5334a1ad0c61bb44219144a96a29aefac6f893d";
+// S-box table
+#define SBOX_SIZE 65536
+char sbox[SBOX_SIZE];
 
 // Permutation table, must match block size
 int permutation[BLOCK_SIZE];
@@ -72,6 +73,7 @@ char round_key_store[ROUNDS][BLOCK_SIZE] = {0};
 char state[BLOCK_SIZE] = {0};
 
 int debug = 0;
+int progress_enabled = 0;
 
 // -----------------------------------
 // FUNCTIONS
@@ -116,7 +118,7 @@ void print_progress(int n, int total, time_t start_time)
     long elapsed = current_time - start_time;
     // Calculate the progress percentage
     int progress = (int)((double)n / total * 100);
-    printf("\033[1A"); // Move cursor up
+    // printf("\033[1A"); // Move cursor up
     printf("\033[2K"); // Clear the line
     printf("\rProcessed %d%% | %d/%d blocks | %ld seconds elapsed", progress, n, total, elapsed);
     fflush(stdout);
@@ -132,6 +134,7 @@ wchar_t emoji_mapper(char symbol)
     return emoji;
 }
 
+// Prints emojis from the state
 void print_emojis(int random_mode)
 {
     setlocale(LC_ALL, "en_US.UTF-8");
@@ -155,8 +158,31 @@ void print_emojis(int random_mode)
     }
 }
 
+// Convert a string to 16-bit symbols
+uint16_t convert_to_symbols(const char *input)
+{
+    int input_length = strlen(input);
+    if (input_length % 2 == 1) // If input is odd length, pad it with the xor of the first and last byte
+    {
+        char xor_byte = input[0] ^ input[input_length - 1];
+        char *padded_input = malloc(input_length + 1);
+        memcpy(padded_input, input, input_length);
+        padded_input[input_length] = xor_byte;
+        input = padded_input;
+        input_length++;
+    }
+    uint16_t output[input_length / 2];
+    int output_i = 0;
+    for (int i = 0; i < input_length; i += 2)
+    {
+        output[output_i] = ((uint16_t)input[i] << 8) | (uint16_t)input[i + 1];
+        output_i++;
+    }
+    return output;
+}
+
 // Convert a hexstring to a char sbox table
-void hexstring_to_sbox(char *hexstring, char *sbox)
+void hexstring_to_sbox(char *hexstring, char *sbox, int sbox_size)
 {
     int len = strlen(hexstring);
     if (len % 2 != 0)
@@ -164,14 +190,14 @@ void hexstring_to_sbox(char *hexstring, char *sbox)
         printf("Error: hexstring length must be even\n");
         raise(SIGINT);
     }
-    if (len / 2 > SBOX_SIZE)
+    if (len / 2 > sbox_size)
     {
-        printf("Error: hexstring is too long for sbox\n");
+        printf("Error: hexstring is too long for sbox. %d > %d\n", len / 2, sbox_size);
         raise(SIGINT);
     }
-    if (len / 2 < SBOX_SIZE)
+    if (len / 2 < sbox_size)
     {
-        printf("Error: hexstring is too short for sbox\n");
+        printf("Error: hexstring is too short for sbox. %d < %d\n", len / 2, sbox_size);
         raise(SIGINT);
     }
     for (int i = 0; i < len; i += 2)
@@ -250,14 +276,26 @@ void generate_keys()
     char round_sbox_string[] = ROUND_SBOX;               // Round substitution table input string
     char master_key_string[] = MASTER_KEY;               // Master key input string
     char permutation_string[] = PERMUTATION;             // Permutation table input string
-    char sbox_string[] = SBOX;                           // Substitution table input string
+
+    FILE *file = fopen("sbox.txt", "rb"); // Read sbox from file
+    if (file == NULL)
+    {
+        perror("Failed to open sbox file. Please initialize sbox.txt with a 65536 bytes of carefully selected random data.");
+        raise(SIGINT);
+    }
+    size_t sbox_input_len = fread(sbox, 1, sizeof(sbox), file);
+    fclose(file);
+    if (sbox_input_len != sizeof(sbox))
+    {
+        printf("Error: failed to read %ld bytes from file. %ld bytes read\n", sizeof(sbox), sbox_input_len);
+        raise(SIGINT);
+    }
 
     // Parse input strings
     hexstring_to_permutation(round_permutation_string, round_permutation);
-    hexstring_to_sbox(round_sbox_string, round_sbox);
+    hexstring_to_sbox(round_sbox_string, round_sbox, 256);
     hexstring_to_master_key(master_key_string, master_key);
     hexstring_to_permutation(permutation_string, permutation);
-    hexstring_to_sbox(sbox_string, sbox);
 
     // Generate round keys from master key
     for (int i = 0; i < ROUNDS; i++) // Initialize round key for every round
@@ -307,9 +345,15 @@ void hash(const char block[BLOCK_SIZE], int data_length)
         {
             // S-box-logic
             // xor the state with the sbox
-            for (int i = 0; i < BLOCK_SIZE; i++)
+            for (int i = 0; i < BLOCK_SIZE; i += 2)
             {
-                state[i] ^= sbox[state[i] & 0xFF];
+                uint8_t h_byte = state[i];
+                uint8_t l_byte = state[i + 1];
+                uint16_t word = (state[i] << 8) | state[i + 1];
+                uint8_t h_sbox_byte = sbox[word];
+                uint8_t l_sbox_byte = sbox[word + 1];
+                state[i] = h_sbox_byte;
+                state[i + 1] = l_sbox_byte;
             }
 
             if (debug)
@@ -325,7 +369,7 @@ void hash(const char block[BLOCK_SIZE], int data_length)
             // Shuffle state with the permutation table
             for (int i = 0; i < BLOCK_SIZE; i++)
             {
-                state[i] = state[permutation[i] % BLOCK_SIZE];
+                state[i] ^= state[permutation[i] % BLOCK_SIZE];
             }
 
             if (debug)
@@ -355,6 +399,10 @@ void hash(const char block[BLOCK_SIZE], int data_length)
         // xor the the state with the current block
         for (int i = 0; i < BLOCK_SIZE; i++)
         {
+            // state[i] ^= block[i];
+            // double temp = pow(state[i], block[i]);
+            // state[i] = (char)temp % 256;
+
             state[i] ^= block[i];
         }
 
@@ -362,7 +410,6 @@ void hash(const char block[BLOCK_SIZE], int data_length)
         {
             printf("Finalized:   ");
             print_state();
-            printf("\n");
             printf("-------------\n");
         }
     }
@@ -379,6 +426,7 @@ int main(int argc, char *argv[])
 
     extern char state[BLOCK_SIZE];
     extern int debug;
+    extern int progress_enabled;
     int random_mode = 0;
     int read_from_file = 0;
     char data[BLOCK_SIZE] = {0};
@@ -397,6 +445,11 @@ int main(int argc, char *argv[])
         {
             // Enable random generator mode
             random_mode = 1;
+        }
+        else if (strcmp(argv[i], "-p") == 0)
+        {
+            // Enable random generator mode
+            progress_enabled = 1;
         }
         else if (strcmp(argv[i], "-f") == 0)
         {
@@ -471,7 +524,7 @@ int main(int argc, char *argv[])
                 data_length = 0;
                 n_blocks_processed++;
 
-                if (debug)
+                if (progress_enabled)
                 {
                     // Print progress
                     time_t current_time = time(NULL);
@@ -500,31 +553,34 @@ int main(int argc, char *argv[])
             // argv[i] now has the input data
             char *input_data = argv[i];                 // Pointer to the input data
             int input_data_length = strlen(input_data); // Length of the input data
-            for (int j = 0; j < input_data_length; j++) // Go through all bytes in the input data
+            for (int k = 0; k < REPEAT_CYCLES; k++)     // Process data more than once, to make sure that changes in last blocks are propagated properly
             {
-                data[data_length] = input_data[j]; // Copy the byte to the data buffer
-                data_length++;                     // Increment the data length
-
-                if (data_length == BLOCK_SIZE) // Do we have a full block?
+                for (int j = 0; j < input_data_length; j++) // Go through all bytes in the input data
                 {
+                    data[data_length] = input_data[j]; // Copy the byte to the data buffer
+                    data_length++;                     // Increment the data length
 
-                    if (debug)
+                    if (data_length == BLOCK_SIZE) // Do we have a full block?
                     {
-                        printf("INPUT:       ");
-                        print_data(data);
-                        printf("\n");
-                    }
-                    hash(data, data_length); // Hash the block
-                    if (debug)
-                    {
-                        printf("OUTPUT:      ");
-                        print_state();
-                        printf("\n");
-                    }
-                    data_length = 0;                     // Block has been hashed, reset data length
-                    for (int i = 0; i < BLOCK_SIZE; i++) // Clear the data buffer, so that last block does not contain repeated data
-                    {
-                        data[i] = 0;
+
+                        if (debug)
+                        {
+                            printf("INPUT:       ");
+                            print_data(data);
+                            printf("\n");
+                        }
+                        hash(data, data_length); // Hash the block
+                        if (debug)
+                        {
+                            printf("OUTPUT:      ");
+                            print_state();
+                            printf("\n");
+                        }
+                        data_length = 0;                     // Block has been hashed, reset data length
+                        for (int i = 0; i < BLOCK_SIZE; i++) // Clear the data buffer, so that last block does not contain repeated data
+                        {
+                            data[i] = 0;
+                        }
                     }
                 }
             }
