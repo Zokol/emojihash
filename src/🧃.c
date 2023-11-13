@@ -347,10 +347,13 @@ void hash(const char block[BLOCK_SIZE], int data_length)
             // xor the state with the sbox
             for (int i = 0; i < BLOCK_SIZE; i += 2)
             {
+                uint8_t h_byte = state[i];
+                uint8_t l_byte = state[i + 1];
                 uint16_t word = (state[i] << 8) | state[i + 1];
-                uint16_t sbox_word = sbox[word];
-                state[i] = sbox_word >> 8;
-                state[i + 1] = sbox_word & 0xFF;
+                uint8_t h_sbox_byte = sbox[word];
+                uint8_t l_sbox_byte = sbox[word + 1];
+                state[i] = h_sbox_byte;
+                state[i + 1] = l_sbox_byte;
             }
 
             if (debug)
@@ -396,14 +399,17 @@ void hash(const char block[BLOCK_SIZE], int data_length)
         // xor the the state with the current block
         for (int i = 0; i < BLOCK_SIZE; i++)
         {
-            state[i] = (state[i] * block[i]) % 256;
+            // state[i] ^= block[i];
+            // double temp = pow(state[i], block[i]);
+            // state[i] = (char)temp % 256;
+
+            state[i] ^= block[i];
         }
 
         if (debug)
         {
             printf("Finalized:   ");
             print_state();
-            printf("\n");
             printf("-------------\n");
         }
     }

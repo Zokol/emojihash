@@ -13,7 +13,7 @@ This is my submission for MEHU1-hash algorithm, as part of 1st annual "Tiivistek
 3. Design is based on SPN, Substitution-Permutation Network. Each round consists of subsitution, permutation and round key addition
 4. The core inspiration for this masterpiece is based on the ADCS-principle of Kouvosto Telecom; Always Deliver Concrete Service
 
-## Usage: 
+## Usage
 ```
 🧃 [-d] [-r] [-f filename | data]
 
@@ -22,5 +22,18 @@ This is my submission for MEHU1-hash algorithm, as part of 1st annual "Tiivistek
 -r is random emoji generator mode. Use with seed data on the command line.
 ```
 
-## Install:
+## Install
 Compiles at least with gcc on OSX: `gcc -o $'\360\237\247\203'.bin $'\360\237\247\203'.c`
+
+## Key generation
+
+### S-box
+`head -c 655360 /dev/urandom | LC_CTYPE=C tr -dc '[:print:]' | head -c 65536 > sbox.txt`
+
+### Round s-box
+`openssl rand -hex 256`
+Copy result to `#define ROUND_SBOX`
+
+### Permutation tables and master key
+`openssl rand -hex 16`
+Copy result to `#define PERMUTATION`, `#define ROUND_PERMUTATION` and `#define MASTER_KEY`
