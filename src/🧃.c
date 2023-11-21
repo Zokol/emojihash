@@ -2,7 +2,7 @@
     🧃.c
 
     Author: Heikki Juva
-    Date: 2021-10-13
+    Date: 2023-10-13
 
     This is my submission for MEHU1-hash algorithm, as part of 1st annual "Tiivistekilpailu" (Hashing competition), organized by AB MEHU Limited
 
@@ -22,14 +22,21 @@
     compiles at least with gcc on OSX:   gcc -o $'\360\237\247\203'.bin $'\360\237\247\203'.c
 */
 
+// -----------------------------------
+// INCLUDES
+// -----------------------------------
+
+// Standard libraries allowed by the competition rules
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
-#include <wchar.h>
-#include <locale.h>
-#include <signal.h>
+
+// Additional libraries justified by the implementation
+#include <wchar.h>  // Imported to support emojis
+#include <locale.h> // Imported to support emojis
+#include <signal.h> // Imported to support SIGINT
 
 // -----------------------------------
 // DEFINITIONS
@@ -72,7 +79,10 @@ char round_key_store[ROUNDS][BLOCK_SIZE] = {0};
 // Internal state of the hash function, also the final hash value.
 char state[BLOCK_SIZE] = {0};
 
+// Debug flag
 int debug = 0;
+
+// Progress flag
 int progress_enabled = 0;
 
 // -----------------------------------
@@ -80,6 +90,8 @@ int progress_enabled = 0;
 // -----------------------------------
 
 // HELPER FUNCTIONS
+
+// Print hash function state
 void print_state()
 {
     extern char state[BLOCK_SIZE];
@@ -90,6 +102,7 @@ void print_state()
     printf("\n");
 }
 
+// Print data block
 void print_data(const char data[BLOCK_SIZE])
 {
     for (int i = 0; i < BLOCK_SIZE; i++)
@@ -99,6 +112,7 @@ void print_data(const char data[BLOCK_SIZE])
     printf("\n");
 }
 
+// Print round keys
 void print_round_keys()
 {
     extern char round_key_store[ROUNDS][BLOCK_SIZE];
@@ -112,13 +126,13 @@ void print_round_keys()
     }
 }
 
+// Print progress bar
 void print_progress(int n, int total, time_t start_time)
 {
     time_t current_time = time(NULL);
     long elapsed = current_time - start_time;
     // Calculate the progress percentage
     int progress = (int)((double)n / total * 100);
-    // printf("\033[1A"); // Move cursor up
     printf("\033[2K"); // Clear the line
     printf("\rProcessed %d%% | %d/%d blocks | %ld seconds elapsed", progress, n, total, elapsed);
     fflush(stdout);
@@ -127,9 +141,9 @@ void print_progress(int n, int total, time_t start_time)
 // Maps byte to emoji
 wchar_t emoji_mapper(char symbol)
 {
-    wchar_t emoji_start = 0x1F600;
-    wchar_t emoji_end = 0x1F64F;
-    int index = (u_int16_t)symbol % (emoji_end - emoji_start);
+    wchar_t emoji_start = 0x1F600;                             // Start range
+    wchar_t emoji_end = 0x1F64F;                               // End range
+    int index = (u_int16_t)symbol % (emoji_end - emoji_start); // Derive index from
     wchar_t emoji = emoji_start + index;
     return emoji;
 }
@@ -315,12 +329,16 @@ void generate_keys()
         print_round_keys();
 }
 
+// -----------------------------------
+// HASH ALGORITHM
+// -----------------------------------
+
 // HASH FUNCTION
 // Function to hash a BLOCK_SIZE-byte input block.
 void hash(const char block[BLOCK_SIZE], int data_length)
 {
     extern char state[BLOCK_SIZE]; // Internal state of the hash function, also the final hash value.
-    extern int debug;
+    extern int debug;              // Debug flag
 
     // add padding to state if needed
     if (data_length < BLOCK_SIZE) // is the data smaller than the block size?
@@ -344,19 +362,19 @@ void hash(const char block[BLOCK_SIZE], int data_length)
         if (ENABLE_SBOX)
         {
             // S-box-logic
-            // xor the state with the sbox
+            // xor the 8-bit state with the 16-bit sbox
             for (int i = 0; i < BLOCK_SIZE; i += 2)
             {
-                uint8_t h_byte = state[i];
-                uint8_t l_byte = state[i + 1];
-                uint16_t word = (state[i] << 8) | state[i + 1];
-                uint8_t h_sbox_byte = sbox[word];
-                uint8_t l_sbox_byte = sbox[word + 1];
-                state[i] = h_sbox_byte;
-                state[i + 1] = l_sbox_byte;
+                uint8_t h_byte = state[i];                      // High byte
+                uint8_t l_byte = state[i + 1];                  // Low byte
+                uint16_t word = (state[i] << 8) | state[i + 1]; // 16-bit word
+                uint8_t h_sbox_byte = sbox[word];               // High byte from sbox
+                uint8_t l_sbox_byte = sbox[word + 1];           // Low byte from sbox
+                state[i] = h_sbox_byte;                         // Store high byte
+                state[i + 1] = l_sbox_byte;                     // Store low byte
             }
 
-            if (debug)
+            if (debug) // If debug is enabled, print sbox state
             {
                 printf("S-box:       ");
                 print_state();
@@ -369,10 +387,10 @@ void hash(const char block[BLOCK_SIZE], int data_length)
             // Shuffle state with the permutation table
             for (int i = 0; i < BLOCK_SIZE; i++)
             {
-                state[i] ^= state[permutation[i] % BLOCK_SIZE];
+                state[i] ^= state[permutation[i] % BLOCK_SIZE]; // xor the state with the permutation table
             }
 
-            if (debug)
+            if (debug) // If debug is enabled, print permutation state
             {
                 printf("Permutation: ");
                 print_state();
@@ -385,10 +403,10 @@ void hash(const char block[BLOCK_SIZE], int data_length)
             // xor the state with the round key
             for (int i = 0; i < BLOCK_SIZE; i++)
             {
-                state[i] ^= round_key_store[round_i][i];
+                state[i] ^= round_key_store[round_i][i]; // xor the state with the round key
             }
 
-            if (debug)
+            if (debug) // If debug is enabled, print round key state
             {
                 printf("Round key:   ");
                 print_state();
@@ -399,14 +417,10 @@ void hash(const char block[BLOCK_SIZE], int data_length)
         // xor the the state with the current block
         for (int i = 0; i < BLOCK_SIZE; i++)
         {
-            // state[i] ^= block[i];
-            // double temp = pow(state[i], block[i]);
-            // state[i] = (char)temp % 256;
-
-            state[i] ^= block[i];
+            state[i] ^= block[i]; // xor the state with the block
         }
 
-        if (debug)
+        if (debug) // If debug is enabled, print finalization state
         {
             printf("Finalized:   ");
             print_state();
@@ -424,14 +438,14 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    extern char state[BLOCK_SIZE];
-    extern int debug;
-    extern int progress_enabled;
-    int random_mode = 0;
-    int read_from_file = 0;
-    char data[BLOCK_SIZE] = {0};
-    int data_length = 0;
-    FILE *file = NULL;
+    extern char state[BLOCK_SIZE]; // Internal state of the hash function, also the final hash value.
+    extern int debug;              // Debug flag
+    extern int progress_enabled;   // Progress flag
+    int random_mode = 0;           // Random mode flag
+    int read_from_file = 0;        // Read from file flag
+    char data[BLOCK_SIZE] = {0};   // Data buffer
+    int data_length = 0;           // Data buffer length
+    FILE *file = NULL;             // Input file
 
     // Parse arguments
     for (int i = 1; i < argc; i++)
@@ -496,6 +510,7 @@ int main(int argc, char *argv[])
         int n_blocks = ceil((double)file_size / BLOCK_SIZE);
         int n_blocks_processed = 0;
 
+        // Store starting time for progress printing
         time_t start_time = time(NULL);
         time_t last_print_time = time(NULL);
 
@@ -503,35 +518,38 @@ int main(int argc, char *argv[])
         char ch;
         while (fread(&ch, 1, 1, file) == 1)
         {
-            data[data_length] = ch;
-            data_length++;
+            data[data_length] = ch; // Copy the byte to the data buffer
+            data_length++;          // Increment the data length
 
+            // Do we have a full block?
             if (data_length == BLOCK_SIZE)
             {
-                if (debug)
+                if (debug) // If debug is enabled, print input state
                 {
                     printf("INPUT:       ");
                     print_data(data);
                     printf("\n");
                 }
+
                 hash(data, data_length); // Hash the block
-                if (debug)
+
+                if (debug) // If debug is enabled, print output state
                 {
                     printf("OUTPUT:      ");
                     print_state();
                     printf("\n");
                 }
-                data_length = 0;
-                n_blocks_processed++;
 
-                if (progress_enabled)
+                data_length = 0;      // Block has been hashed, reset data length
+                n_blocks_processed++; // Increment number of blocks processed
+
+                if (progress_enabled) // If progress printing is enabled, print progress
                 {
-                    // Print progress
-                    time_t current_time = time(NULL);
+                    time_t current_time = time(NULL); // Get current time
                     if (time(NULL) - last_print_time > 0)
                     {
                         print_progress(n_blocks_processed, n_blocks, start_time);
-                        last_print_time = time(NULL);
+                        last_print_time = time(NULL); // Update last print time
                     }
                 }
             }
